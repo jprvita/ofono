@@ -68,6 +68,16 @@ static GSList *drivers = 0;
 static ofono_bool_t has_wideband = FALSE;
 static int defer_setup = 1;
 
+static uint16_t codec2setting(uint8_t codec)
+{
+	switch (codec) {
+		case HFP_CODEC_CVSD:
+			return BT_VOICE_CVSD;
+		default:
+			return BT_VOICE_TRANSPARENT;
+	}
+}
+
 static void send_new_connection(const char *card, int fd, uint8_t codec)
 {
 	DBusMessage *msg;
@@ -107,6 +117,7 @@ static gboolean sco_accept(GIOChannel *io, GIOCondition cond,
 {
 	struct ofono_handsfree_card *card;
 	struct sockaddr_sco saddr;
+	struct bt_voice voice;
 	socklen_t alen;
 	int sk, nsk;
 	char local[18], remote[18];
@@ -149,6 +160,13 @@ static gboolean sco_accept(GIOChannel *io, GIOCondition cond,
 		close(nsk);
 		return TRUE;
 	}
+
+	memset(&voice, 0, sizeof(voice));
+	voice.setting = codec2setting(card->selected_codec);
+
+	if (setsockopt(nsk, SOL_BLUETOOTH, BT_VOICE, &voice, sizeof(voice)) < 0)
+		ofono_error("Can't set voice settings: %s (%d)",
+						strerror(errno), errno);
 
 	send_new_connection(card->path, nsk, card->selected_codec);
 	close(nsk);
