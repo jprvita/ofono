@@ -574,9 +574,7 @@ static DBusMessage *profile_cancel(DBusConnection *conn,
 {
 	DBG("Profile handler Cancel");
 
-	return g_dbus_create_error(msg, BLUEZ_ERROR_INTERFACE
-					".NotImplemented",
-					"Implementation not provided");
+	return dbus_message_new_method_return(msg);
 }
 
 static DBusMessage *profile_disconnection(DBusConnection *conn,
