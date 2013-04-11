@@ -256,17 +256,17 @@ static gboolean sco_connect_cb(GIOChannel *io, GIOCondition cond,
 
 {
 	struct ofono_handsfree_card *card = user_data;
-	DBusMessage *reply;
-	int sk;
+	DBusMessage *reply = NULL;
+	int sk, err;
 
 	if (agent == NULL) {
 		/* There's no agent, so there's no one to reply to */
-		reply = NULL;
+		err = -ENOENT;
 		goto done;
 	}
 
 	if (cond & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)) {
-		reply = __ofono_error_failed(card->msg);
+		err = -EIO;
 		goto done;
 	}
 
@@ -276,9 +276,17 @@ static gboolean sco_connect_cb(GIOChannel *io, GIOCondition cond,
 
 	close(sk);
 
-	reply = dbus_message_new_method_return(card->msg);
+	err = 0;
 
 done:
+	if (card->msg == NULL)
+		return FALSE;
+
+	if (err == 0)
+		reply = dbus_message_new_method_return(card->msg);
+	else if (err != -ENOENT)
+		reply = __ofono_error_failed(card->msg);
+
 	if (reply)
 		g_dbus_send_message(ofono_dbus_get_connection(), reply);
 
