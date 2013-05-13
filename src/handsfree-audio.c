@@ -442,6 +442,7 @@ int ofono_handsfree_card_connect_sco(struct ofono_handsfree_card *card)
 {
 	GIOChannel *io;
 	struct sockaddr_sco addr;
+	struct bt_voice voice;
 	int sk, ret;
 
 	sk = socket(PF_BLUETOOTH, SOCK_SEQPACKET | O_NONBLOCK | SOCK_CLOEXEC,
@@ -464,6 +465,13 @@ int ofono_handsfree_card_connect_sco(struct ofono_handsfree_card *card)
 	memset(&addr, 0, sizeof(addr));
 	addr.sco_family = AF_BLUETOOTH;
 	bt_str2ba(card->remote, &addr.sco_bdaddr);
+
+	memset(&voice, 0, sizeof(voice));
+	voice.setting = codec2setting(card->selected_codec);
+
+	if (setsockopt(sk, SOL_BLUETOOTH, BT_VOICE, &voice, sizeof(voice)) < 0)
+		ofono_error("Can't set voice settings: %s (%d)",
+						strerror(errno), errno);
 
 	ret = connect(sk, (struct sockaddr *) &addr, sizeof(addr));
 	if (ret < 0 && errno != EINPROGRESS) {
