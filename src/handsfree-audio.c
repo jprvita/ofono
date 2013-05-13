@@ -66,7 +66,7 @@ static GSList *card_list = 0;
 static guint sco_watch = 0;
 static GSList *drivers = 0;
 static ofono_bool_t has_wideband = FALSE;
-static int defer_setup = 1;
+static ofono_bool_t transparent_sco = FALSE;
 
 static uint16_t codec2setting(uint8_t codec)
 {
@@ -178,7 +178,9 @@ static int sco_init(void)
 {
 	GIOChannel *sco_io;
 	struct sockaddr_sco saddr;
-	int sk;
+	struct bt_voice voice;
+	int defer_setup, sk;
+	socklen_t len;
 
 	sk = socket(PF_BLUETOOTH, SOCK_SEQPACKET | O_NONBLOCK | SOCK_CLOEXEC,
 								BTPROTO_SCO);
@@ -195,12 +197,21 @@ static int sco_init(void)
 		return -errno;
 	}
 
+	defer_setup = 1;
+
 	if (setsockopt(sk, SOL_BLUETOOTH, BT_DEFER_SETUP,
 				&defer_setup, sizeof(defer_setup)) < 0) {
 		defer_setup = 0;
 		ofono_warn("Can't enable deferred setup: %s (%d)",
 						strerror(errno), errno);
 	}
+
+	memset(&voice, 0, sizeof(voice));
+	len = sizeof(voice);
+
+	if (defer_setup && getsockopt(sk, SOL_BLUETOOTH, BT_VOICE,
+						&voice, &len) == 0)
+		transparent_sco = TRUE;
 
 	if (listen(sk, 5) < 0) {
 		close(sk);
@@ -585,9 +596,9 @@ ofono_bool_t ofono_handsfree_audio_has_wideband(void)
 	return has_wideband;
 }
 
-ofono_bool_t ofono_handsfree_audio_has_defer_setup(void)
+ofono_bool_t ofono_handsfree_audio_has_transparent_sco(void)
 {
-	return defer_setup == 1;
+	return transparent_sco;
 }
 
 static void agent_free(struct agent *agent)
@@ -705,12 +716,12 @@ static DBusMessage *am_agent_register(DBusConnection *conn,
 	DBG("Agent %s registered with the CODECs:%s%s", sender,
 		has_cvsd ? " CVSD" : "", has_msbc ? " mSBC" : "");
 
-	if (has_msbc && defer_setup == 1)
+	if (has_msbc && transparent_sco)
 		has_wideband = TRUE;
 	else {
 		has_wideband = FALSE;
 		DBG("Wideband speech disabled: %s", has_msbc ?
-			"no SCO defer setup support" : "no mSBC support");
+			"no Transparent SCO support" : "no mSBC support");
 	}
 
 	if (has_cvsd == FALSE) {
